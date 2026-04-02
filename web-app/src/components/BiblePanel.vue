@@ -650,18 +650,21 @@ onMounted(() => {
 }
 
 .bible-tabs :deep(.n-tabs-nav) {
-  padding-bottom: 8px;
+  padding-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .bible-tabs :deep(.n-tabs-pane-wrapper) {
   flex: 1;
   min-height: 0;
+  padding-top: 0;
 }
 
 .bible-tabs :deep(.n-tab-pane) {
   height: 100%;
   display: flex;
   flex-direction: column;
+  padding-top: 0;
 }
 
 .bible-scroll {
@@ -677,7 +680,7 @@ onMounted(() => {
 }
 
 .bible-form {
-  padding: 16px;
+  padding: 12px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
