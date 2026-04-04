@@ -22,6 +22,8 @@ class PlotArcMapper:
         return {
             "id": plot_arc.id,
             "novel_id": plot_arc.novel_id.value,
+            "slug": getattr(plot_arc, "slug", "default") or "default",
+            "display_name": getattr(plot_arc, "display_name", "") or "",
             "key_points": [
                 {
                     "chapter_number": point.chapter_number,
@@ -68,7 +70,9 @@ class PlotArcMapper:
             plot_arc = PlotArc(
                 id=data["id"],
                 novel_id=NovelId(data["novel_id"]),
-                key_points=key_points
+                key_points=key_points,
+                slug=data.get("slug") or "default",
+                display_name=data.get("display_name") or "",
             )
 
             return plot_arc

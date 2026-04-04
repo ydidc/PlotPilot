@@ -8,10 +8,19 @@ from domain.novel.value_objects.tension_level import TensionLevel
 class PlotArc(BaseEntity):
     """剧情弧实体"""
 
-    def __init__(self, id: str, novel_id: NovelId, key_points: Optional[List[PlotPoint]] = None):
+    def __init__(
+        self,
+        id: str,
+        novel_id: NovelId,
+        key_points: Optional[List[PlotPoint]] = None,
+        slug: str = "default",
+        display_name: str = "",
+    ):
         super().__init__(id)
         self.novel_id = novel_id
         self.key_points: List[PlotPoint] = key_points if key_points is not None else []
+        self.slug = slug or "default"
+        self.display_name = display_name or ""
 
     def add_plot_point(self, point: PlotPoint) -> None:
         """添加剧情点，自动按章节号排序"""
