@@ -53,6 +53,11 @@ class CreateChapterRequest(BaseModel):
     content: str = Field(..., min_length=1, description="章节内容")
 
 
+class EnsureChapterRequest(BaseModel):
+    """确保章节存在请求（可选 title，不传则用「第N章」）"""
+    title: str = Field(default="", max_length=200, description="章节标题（可选）")
+
+
 # Routes
 @router.get("/{novel_id}/chapters", response_model=List[ChapterDTO])
 async def list_chapters(
@@ -125,6 +130,20 @@ async def get_chapter(
             detail=f"Chapter not found: {novel_id}/chapter-{chapter_number}"
         )
     return chapter
+
+
+@router.post("/{novel_id}/chapters/{chapter_number}/ensure", response_model=ChapterDTO)
+async def ensure_chapter(
+    novel_id: str,
+    request: EnsureChapterRequest,
+    chapter_number: int = Path(..., gt=0, description="章节编号"),
+    service: ChapterService = Depends(get_chapter_service)
+):
+    """确保章节在正文库中存在；若不存在则创建空白记录（不校验章节号连续性）。
+
+    适用于结构树手动添加章节节点后、用户点击想直接开始写作的场景。
+    """
+    return service.ensure_chapter(novel_id, chapter_number, request.title)
 
 
 @router.put("/{novel_id}/chapters/{chapter_number}", response_model=ChapterDTO)

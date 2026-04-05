@@ -2,7 +2,7 @@
 from typing import List, Optional
 from datetime import datetime
 import re
-from domain.novel.entities.chapter import Chapter
+from domain.novel.entities.chapter import Chapter, ChapterStatus
 from domain.novel.value_objects.chapter_id import ChapterId
 from domain.novel.value_objects.novel_id import NovelId
 from domain.novel.repositories.chapter_repository import ChapterRepository
@@ -293,6 +293,39 @@ class ChapterService:
             scene_count=scene_count,
             pacing=pacing
         )
+
+    def ensure_chapter(
+        self,
+        novel_id: str,
+        chapter_number: int,
+        title: str = ""
+    ) -> ChapterDTO:
+        """确保章节在正文库中存在；不存在则创建空白记录（不校验章节号连续性）。
+
+        Args:
+            novel_id: 小说 ID
+            chapter_number: 章节号
+            title: 章节标题（可选，默认为 "第N章"）
+
+        Returns:
+            ChapterDTO
+        """
+        existing = self.get_chapter_by_novel_and_number(novel_id, chapter_number)
+        if existing:
+            return existing
+
+        chapter_title = title.strip() if title and title.strip() else f"第{chapter_number}章"
+        chapter_id = f"chapter-{novel_id}-{chapter_number}"
+        chapter = Chapter(
+            id=chapter_id,
+            novel_id=NovelId(novel_id),
+            number=chapter_number,
+            title=chapter_title,
+            content="",
+            status=ChapterStatus.DRAFT,
+        )
+        self.chapter_repository.save(chapter)
+        return ChapterDTO.from_domain(chapter)
 
     def _get_chapter_by_novel_and_number(
         self,
