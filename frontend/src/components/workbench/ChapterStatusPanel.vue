@@ -2,146 +2,133 @@
   <div class="chapter-status-panel">
     <n-empty v-if="!chapter" description="请从左侧选择一个章节" style="margin-top: 48px" />
 
-    <n-space v-else vertical :size="16" style="width: 100%; padding: 8px 4px">
-      <n-card title="本章概览" size="small" :bordered="false">
-        <n-descriptions :column="1" label-placement="left" size="small">
-          <n-descriptions-item label="章节号">第 {{ chapter.number }} 章</n-descriptions-item>
-          <n-descriptions-item label="标题">{{ chapter.title || '（无标题）' }}</n-descriptions-item>
-          <n-descriptions-item label="收稿状态">
+    <n-space v-else vertical :size="12" style="width: 100%; padding: 8px 4px">
+      <!-- 章节基本信息 -->
+      <n-card size="small" :bordered="true" class="status-card">
+        <div class="chapter-header">
+          <div class="chapter-title-row">
+            <n-text class="chapter-number">第 {{ chapter.number }} 章</n-text>
+            <n-text class="chapter-title">{{ chapter.title || '未命名' }}</n-text>
+          </div>
+          <div class="chapter-meta">
             <n-tag :type="chapter.word_count > 0 ? 'success' : 'default'" size="small" round>
               {{ chapter.word_count > 0 ? '已收稿' : '未收稿' }}
             </n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="正文字数">{{ chapter.word_count ?? 0 }} 字</n-descriptions-item>
-        </n-descriptions>
+            <n-text depth="3" class="word-count">{{ chapter.word_count ?? 0 }} 字</n-text>
+          </div>
+        </div>
       </n-card>
 
-      <n-alert v-if="readOnly" type="warning" :show-icon="true" title="托管运行中">
-        全托管正在执行时，辅助撰稿区仅可阅读正文与关联信息，无法保存或改稿。请停止托管后再编辑。
+      <n-alert v-if="readOnly" type="warning" :show-icon="true" size="small">
+        全托管执行中，辅助撰稿区仅可阅读
       </n-alert>
 
-      <n-text v-else depth="3" style="font-size: 12px">
-        下方「人工审阅 / 正文结构」来自 API；「AI 生成质检」来自最近一次流式生成，一致性报告含问题、警告与建议。
-      </n-text>
-
+      <!-- 人工审阅 -->
       <n-spin :show="metaLoading">
-        <n-card
-          v-if="slug"
-          title="人工审阅（落库）"
-          size="small"
-          :bordered="false"
-        >
-          <n-empty
-            v-if="chapterReview === null && !metaLoading"
-            description="暂无审阅记录或尚未拉取"
-            size="small"
-          />
-          <n-descriptions v-else-if="chapterReview" :column="1" label-placement="left" size="small">
-            <n-descriptions-item label="状态">
-              <n-tag size="small" round>{{ reviewStatusLabel(chapterReview.status) }}</n-tag>
-            </n-descriptions-item>
-            <n-descriptions-item label="备忘">
-              <n-text style="font-size: 12px; white-space: pre-wrap">{{ chapterReview.memo || '—' }}</n-text>
-            </n-descriptions-item>
-            <n-descriptions-item v-if="chapterReview.updated_at" label="更新">
-              {{ chapterReview.updated_at }}
-            </n-descriptions-item>
-          </n-descriptions>
-          <n-text depth="3" class="meta-hint">
-            与章节编辑页「审定」同源；GET/PUT
-            <code class="inline-code">/novels/{id}/chapters/{n}/review</code>
-          </n-text>
+        <n-card v-if="slug" size="small" :bordered="true" class="status-card">
+          <template #header>
+            <span class="card-title">📝 人工审阅</span>
+          </template>
+          <n-empty v-if="!chapterReview && !metaLoading" description="暂无审阅记录" size="small" />
+          <div v-else-if="chapterReview" class="review-content">
+            <div class="review-row">
+              <n-text depth="3">状态</n-text>
+              <n-tag size="small" round :type="getReviewStatusType(chapterReview.status)">
+                {{ reviewStatusLabel(chapterReview.status) }}
+              </n-tag>
+            </div>
+            <div v-if="chapterReview.memo" class="review-row">
+              <n-text depth="3">备忘</n-text>
+              <n-text class="memo-text">{{ chapterReview.memo }}</n-text>
+            </div>
+            <div v-if="chapterReview.updated_at" class="review-row">
+              <n-text depth="3">更新</n-text>
+              <n-text depth="3" style="font-size: 12px">{{ formatTime(chapterReview.updated_at) }}</n-text>
+            </div>
+          </div>
         </n-card>
 
-        <n-card
-          v-if="slug"
-          title="正文结构分析"
-          size="small"
-          :bordered="false"
-        >
-          <n-empty
-            v-if="chapterStructure === null && !metaLoading"
-            description="暂无结构分析（或章节未生成正文）"
-            size="small"
-          />
-          <n-descriptions v-else-if="chapterStructure" :column="1" label-placement="left" size="small">
-            <n-descriptions-item label="分段数">{{ chapterStructure.paragraph_count ?? '—' }}</n-descriptions-item>
-            <n-descriptions-item label="场景数">{{ chapterStructure.scene_count ?? '—' }}</n-descriptions-item>
-            <n-descriptions-item label="对白占比">
-              {{ chapterStructure.dialogue_ratio != null ? `${Math.round(chapterStructure.dialogue_ratio * 100)}%` : '—' }}
-            </n-descriptions-item>
-            <n-descriptions-item label="节奏">{{ pacingLabel(chapterStructure.pacing) }}</n-descriptions-item>
-          </n-descriptions>
-          <n-text depth="3" class="meta-hint">
-            <code class="inline-code">GET …/chapters/{章节号}/structure</code>
-          </n-text>
+        <!-- 正文结构 -->
+        <n-card v-if="slug" size="small" :bordered="true" class="status-card">
+          <template #header>
+            <span class="card-title">📊 正文结构</span>
+          </template>
+          <n-empty v-if="!chapterStructure && !metaLoading" description="暂无结构分析" size="small" />
+          <div v-else-if="chapterStructure" class="structure-grid">
+            <div class="structure-item">
+              <n-text depth="3">分段</n-text>
+              <n-text class="structure-value">{{ chapterStructure.paragraph_count ?? '—' }}</n-text>
+            </div>
+            <div class="structure-item">
+              <n-text depth="3">场景</n-text>
+              <n-text class="structure-value">{{ chapterStructure.scene_count ?? '—' }}</n-text>
+            </div>
+            <div class="structure-item">
+              <n-text depth="3">对白</n-text>
+              <n-text class="structure-value">
+                {{ chapterStructure.dialogue_ratio != null ? `${Math.round(chapterStructure.dialogue_ratio * 100)}%` : '—' }}
+              </n-text>
+            </div>
+            <div class="structure-item">
+              <n-text depth="3">节奏</n-text>
+              <n-tag size="tiny" round>{{ pacingLabel(chapterStructure.pacing) }}</n-tag>
+            </div>
+          </div>
         </n-card>
       </n-spin>
 
-      <n-card
-        v-if="autopilotChapterReview"
-        title="全托管 · 章末审阅"
-        size="small"
-        :bordered="false"
-      >
-        <n-descriptions :column="1" label-placement="left" size="small">
-          <n-descriptions-item label="审阅章号">
-            第 {{ autopilotChapterReview.chapter_number }} 章
-            <n-tag
-              v-if="chapter && chapter.number !== autopilotChapterReview.chapter_number"
-              size="tiny"
-              type="info"
-              style="margin-left: 6px"
-            >
-              当前浏览为第 {{ chapter.number }} 章
+      <!-- 全托管章末审阅 -->
+      <n-card v-if="autopilotChapterReview" size="small" :bordered="true" class="status-card">
+        <template #header>
+          <span class="card-title">🤖 自动审阅</span>
+        </template>
+        <n-alert
+          v-if="chapter && chapter.number !== autopilotChapterReview.chapter_number"
+          type="info"
+          size="small"
+          style="margin-bottom: 12px"
+        >
+          为第 {{ autopilotChapterReview.chapter_number }} 章结果
+        </n-alert>
+        <div class="autopilot-review">
+          <div class="review-row">
+            <n-text depth="3">张力</n-text>
+            <div class="tension-bar">
+              <div class="tension-fill" :style="{ width: `${autopilotChapterReview.tension * 10}%` }"></div>
+              <n-text class="tension-value">{{ autopilotChapterReview.tension }}/10</n-text>
+            </div>
+          </div>
+          <div class="review-row">
+            <n-text depth="3">管线</n-text>
+            <n-tag :type="autopilotChapterReview.narrative_sync_ok ? 'success' : 'warning'" size="small" round>
+              {{ autopilotChapterReview.narrative_sync_ok ? '已同步' : '同步失败' }}
             </n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="张力（1–10）">{{ autopilotChapterReview.tension }}</n-descriptions-item>
-          <n-descriptions-item label="叙事管线">
-            <n-tag
-              :type="autopilotChapterReview.narrative_sync_ok ? 'success' : 'warning'"
-              size="small"
-              round
-            >
-              {{ autopilotChapterReview.narrative_sync_ok ? '摘要/向量/伏笔已落库' : '同步失败或降级' }}
-            </n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item label="文风相似度">
-            {{
-              autopilotChapterReview.similarity_score != null
-                ? Number(autopilotChapterReview.similarity_score).toFixed(3)
-                : '—'
-            }}
-          </n-descriptions-item>
-          <n-descriptions-item label="漂移告警">
+          </div>
+          <div v-if="autopilotChapterReview.similarity_score != null" class="review-row">
+            <n-text depth="3">文风</n-text>
+            <n-text>{{ Number(autopilotChapterReview.similarity_score).toFixed(3) }}</n-text>
+          </div>
+          <div class="review-row">
+            <n-text depth="3">漂移</n-text>
             <n-tag :type="autopilotChapterReview.drift_alert ? 'error' : 'success'" size="small" round>
-              {{ autopilotChapterReview.drift_alert ? '是（可能已触发删章重写）' : '否' }}
+              {{ autopilotChapterReview.drift_alert ? '告警' : '正常' }}
             </n-tag>
-          </n-descriptions-item>
-          <n-descriptions-item v-if="autopilotChapterReview.at" label="审阅时间">
-            {{ autopilotChapterReview.at }}
-          </n-descriptions-item>
-        </n-descriptions>
-        <n-text depth="3" style="font-size: 11px; display: block; margin-top: 8px">
-          与守护进程 AUDITING 阶段一致：章后管线含叙事同步、文风、图谱推断与伏笔/三元组落库。
-        </n-text>
+          </div>
+        </div>
       </n-card>
 
-      <n-card
-        v-if="lastWorkflowResult && qcChapterNumber != null"
-        title="AI 生成质检"
-        size="small"
-        :bordered="false"
-      >
-        <n-space vertical :size="12">
+      <!-- AI 生成质检 -->
+      <n-card v-if="lastWorkflowResult && qcChapterNumber != null" size="small" :bordered="true" class="status-card">
+        <template #header>
+          <span class="card-title">✨ 生成质检</span>
+        </template>
+        <n-space vertical :size="10">
           <n-alert
             v-if="chapter.number !== qcChapterNumber"
             type="info"
-            :show-icon="true"
-            style="font-size: 12px"
+            size="small"
           >
-            以下结果为最近一次针对「第 {{ qcChapterNumber }} 章」流式生成的质检摘要；当前浏览为第
-            {{ chapter.number }} 章。切换到第 {{ qcChapterNumber }} 章可对照正文。
+            为第 {{ qcChapterNumber }} 章质检结果
           </n-alert>
 
           <ConsistencyReportPanel
@@ -151,22 +138,17 @@
           />
 
           <n-collapse
-            v-if="
-              lastWorkflowResult.style_warnings && lastWorkflowResult.style_warnings.length > 0
-            "
-            class="cliche-collapse"
+            v-if="lastWorkflowResult.style_warnings && lastWorkflowResult.style_warnings.length > 0"
+            class="qc-collapse"
           >
-            <n-collapse-item
-              :title="`俗套句式命中 ${lastWorkflowResult.style_warnings.length} 处（点击展开）`"
-              name="cliche"
-            >
+            <n-collapse-item :title="`俗套句式 ${lastWorkflowResult.style_warnings.length} 处`" name="cliche">
               <n-space vertical :size="6">
                 <n-alert
                   v-for="(w, i) in lastWorkflowResult.style_warnings"
                   :key="i"
                   :type="w.severity === 'warning' ? 'warning' : 'info'"
                   :title="w.pattern"
-                  style="font-size: 12px"
+                  size="small"
                 >
                   「{{ w.text }}」
                 </n-alert>
@@ -174,17 +156,14 @@
             </n-collapse-item>
           </n-collapse>
 
-          <n-collapse
-            v-if="ghostAnnotationLines.length > 0"
-            class="cliche-collapse"
-          >
-            <n-collapse-item :title="`冲突 / 幽灵批注 ${ghostAnnotationLines.length} 条`" name="ghost">
+          <n-collapse v-if="ghostAnnotationLines.length > 0" class="qc-collapse">
+            <n-collapse-item :title="`冲突批注 ${ghostAnnotationLines.length} 条`" name="ghost">
               <n-space vertical :size="6">
                 <n-alert
                   v-for="(line, gi) in ghostAnnotationLines"
                   :key="gi"
                   type="warning"
-                  style="font-size: 12px"
+                  size="small"
                 >
                   {{ line }}
                 </n-alert>
@@ -192,9 +171,9 @@
             </n-collapse-item>
           </n-collapse>
 
-          <n-space :size="8" wrap>
-            <n-button size="small" quaternary @click="$emit('go-editor')">打开章节编辑</n-button>
-            <n-button size="small" quaternary @click="$emit('clear-qc')">清除质检摘要</n-button>
+          <n-space :size="8">
+            <n-button size="tiny" quaternary @click="$emit('go-editor')">打开编辑</n-button>
+            <n-button size="tiny" quaternary @click="$emit('clear-qc')">清除</n-button>
           </n-space>
         </n-space>
       </n-card>
@@ -226,13 +205,11 @@ export interface AutopilotChapterAudit {
 }
 
 const props = defineProps<{
-  /** 作品 id，用于 chapter review / structure API */
   slug?: string
   chapter: Chapter | null
   readOnly?: boolean
   lastWorkflowResult?: GenerateChapterWorkflowResponse | null
   qcChapterNumber?: number | null
-  /** 全托管章末审阅（与 /autopilot/status.last_chapter_audit 同源） */
   autopilotChapterReview?: AutopilotChapterAudit | null
 }>()
 
@@ -274,10 +251,20 @@ function reviewStatusLabel(s: string) {
   const m: Record<string, string> = {
     draft: '草稿',
     reviewed: '已审',
-    approved: '已通过',
+    approved: '通过',
     pending: '待定',
   }
   return m[s] || s || '—'
+}
+
+function getReviewStatusType(s: string): 'default' | 'info' | 'success' | 'warning' | 'error' {
+  const m: Record<string, 'default' | 'info' | 'success' | 'warning' | 'error'> = {
+    draft: 'default',
+    reviewed: 'info',
+    approved: 'success',
+    pending: 'warning',
+  }
+  return m[s] || 'default'
 }
 
 function pacingLabel(p: string) {
@@ -287,6 +274,19 @@ function pacingLabel(p: string) {
     fast: '快',
   }
   return m[p] || p || '—'
+}
+
+function formatTime(t: string) {
+  try {
+    return new Date(t).toLocaleString('zh-CN', {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch {
+    return t
+  }
 }
 
 async function loadChapterMeta() {
@@ -315,7 +315,7 @@ watch(
 )
 
 function onLocationClick(location: number) {
-  message.info(`问题位置约在第 ${location} 字附近，可在章节编辑中搜索或滚动查看。`)
+  message.info(`问题位置约在第 ${location} 字附近`)
 }
 </script>
 
@@ -324,24 +324,133 @@ function onLocationClick(location: number) {
   height: 100%;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 20px 20px;
+  padding: 12px 16px 20px;
 }
 
-.cliche-collapse :deep(.n-collapse-item__header) {
+.status-card {
+  transition: all 0.2s ease;
+}
+
+.status-card:hover {
+  border-color: var(--n-primary-color-hover);
+}
+
+.card-title {
   font-size: 13px;
+  font-weight: 600;
 }
 
-.inline-code {
-  font-size: 11px;
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--n-code-color);
+/* 章节头部 */
+.chapter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.meta-hint {
-  display: block;
-  margin-top: 10px;
+.chapter-title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chapter-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--n-text-color-2);
+}
+
+.chapter-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--n-text-color-1);
+}
+
+.chapter-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.word-count {
+  font-size: 12px;
+}
+
+/* 审阅内容 */
+.review-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.memo-text {
+  font-size: 12px;
+  text-align: right;
+  max-width: 60%;
+}
+
+/* 结构网格 */
+.structure-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.structure-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.structure-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--n-text-color-1);
+}
+
+/* 自动审阅 */
+.autopilot-review {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tension-bar {
+  position: relative;
+  width: 100%;
+  height: 20px;
+  background: var(--n-color-modal);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.tension-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #f59e0b, #ef4444);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+}
+
+.tension-value {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 11px;
-  line-height: 1.45;
+  font-weight: 600;
+  color: var(--n-text-color-1);
+}
+
+/* 折叠面板 */
+.qc-collapse :deep(.n-collapse-item__header) {
+  font-size: 12px;
 }
 </style>

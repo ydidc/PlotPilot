@@ -165,9 +165,9 @@
           <n-card size="small" :bordered="true" class="ce-card-elements">
             <template #header>
               <div class="ce-card-header-col">
-                <span class="ce-card-header-title">人物 / 地点 / 道具（章级）</span>
+                <span class="ce-card-header-title">人物 / 地点 / 道具</span>
                 <n-text depth="3" class="ce-card-header-sub">
-                  与 Bible 元素 ID 一致，供本章检索、批注与叙事同步；非全书设定。
+                  本章涉及的元素，来自叙事同步和手动标注
                 </n-text>
               </div>
             </template>
@@ -188,133 +188,62 @@
 
             <n-spin :show="loading">
               <n-space vertical :size="5">
-                <n-space v-if="groupedCharacters.length" vertical :size="4">
-                  <n-text strong class="ce-group-label">人物</n-text>
-                  <div v-for="elem in groupedCharacters" :key="elem.id" class="ce-item">
-                    <div class="ce-item-info">
-                      <n-text class="ce-id">{{ elem.element_id }}</n-text>
-                      <n-tag size="tiny" round>{{ relationLabel(elem.relation_type) }}</n-tag>
-                      <n-tag :type="elem.importance === 'major' ? 'error' : elem.importance === 'minor' ? 'default' : 'info'" size="tiny" round>
+                <n-space v-if="groupedCharacters.length" vertical :size="6">
+                  <n-text strong class="ce-group-label">👤 人物</n-text>
+                  <n-space vertical :size="4">
+                    <div v-for="elem in groupedCharacters" :key="elem.id" class="ce-item-readonly">
+                      <n-text class="ce-element-name">{{ elem.element_id }}</n-text>
+                      <n-tag size="tiny" round type="default">{{ relationLabel(elem.relation_type) }}</n-tag>
+                      <n-tag :type="getImportanceType(elem.importance)" size="tiny" round>
                         {{ importanceLabel(elem.importance) }}
                       </n-tag>
-                      <n-text v-if="elem.notes" depth="3" class="ce-notes ce-notes--inline">{{ elem.notes }}</n-text>
+                      <n-text v-if="elem.notes" depth="3" style="font-size: 12px; margin-left: 8px">
+                        {{ elem.notes }}
+                      </n-text>
                     </div>
-                    <n-button
-                      v-if="!readOnly"
-                      size="tiny"
-                      type="error"
-                      text
-                      :loading="deletingId === elem.id"
-                      @click="doDelete(elem)"
-                    >删除</n-button>
-                  </div>
+                  </n-space>
                 </n-space>
 
-                <n-space v-if="groupedLocations.length" vertical :size="4">
-                  <n-text strong class="ce-group-label">地点</n-text>
-                  <div v-for="elem in groupedLocations" :key="elem.id" class="ce-item">
-                    <div class="ce-item-info">
-                      <n-text class="ce-id">{{ elem.element_id }}</n-text>
-                      <n-tag size="tiny" round>{{ relationLabel(elem.relation_type) }}</n-tag>
-                      <n-tag :type="elem.importance === 'major' ? 'error' : elem.importance === 'minor' ? 'default' : 'info'" size="tiny" round>
+                <n-space v-if="groupedLocations.length" vertical :size="6">
+                  <n-text strong class="ce-group-label">📍 地点</n-text>
+                  <n-space vertical :size="4">
+                    <div v-for="elem in groupedLocations" :key="elem.id" class="ce-item-readonly">
+                      <n-text class="ce-element-name">{{ elem.element_id }}</n-text>
+                      <n-tag size="tiny" round type="default">{{ relationLabel(elem.relation_type) }}</n-tag>
+                      <n-tag :type="getImportanceType(elem.importance)" size="tiny" round>
                         {{ importanceLabel(elem.importance) }}
                       </n-tag>
-                      <n-text v-if="elem.notes" depth="3" class="ce-notes ce-notes--inline">{{ elem.notes }}</n-text>
+                      <n-text v-if="elem.notes" depth="3" style="font-size: 12px; margin-left: 8px">
+                        {{ elem.notes }}
+                      </n-text>
                     </div>
-                    <n-button
-                      v-if="!readOnly"
-                      size="tiny"
-                      type="error"
-                      text
-                      :loading="deletingId === elem.id"
-                      @click="doDelete(elem)"
-                    >删除</n-button>
-                  </div>
+                  </n-space>
                 </n-space>
 
-                <n-space v-if="groupedOther.length" vertical :size="4">
-                  <n-text strong class="ce-group-label">其他</n-text>
-                  <div v-for="elem in groupedOther" :key="elem.id" class="ce-item">
-                    <div class="ce-item-info">
-                      <n-tag :type="elemTypeColor(elem.element_type)" size="tiny" round>{{ elemTypeLabel(elem.element_type) }}</n-tag>
-                      <n-text class="ce-id ce-id--inline">{{ elem.element_id }}</n-text>
-                      <n-tag size="tiny" round>{{ relationLabel(elem.relation_type) }}</n-tag>
-                      <n-tag :type="elem.importance === 'major' ? 'error' : elem.importance === 'minor' ? 'default' : 'info'" size="tiny" round>
+                <n-space v-if="groupedOther.length" vertical :size="6">
+                  <n-text strong class="ce-group-label">📦 其他</n-text>
+                  <n-space vertical :size="4">
+                    <div v-for="elem in groupedOther" :key="elem.id" class="ce-item-readonly">
+                      <n-tag :type="elemTypeColor(elem.element_type)" size="tiny" round>
+                        {{ elemTypeLabel(elem.element_type) }}
+                      </n-tag>
+                      <n-text class="ce-element-name">{{ elem.element_id }}</n-text>
+                      <n-tag size="tiny" round type="default">{{ relationLabel(elem.relation_type) }}</n-tag>
+                      <n-tag :type="getImportanceType(elem.importance)" size="tiny" round>
                         {{ importanceLabel(elem.importance) }}
                       </n-tag>
-                      <n-text v-if="elem.notes" depth="3" class="ce-notes">{{ elem.notes }}</n-text>
+                      <n-text v-if="elem.notes" depth="3" style="font-size: 12px; margin-left: 8px">
+                        {{ elem.notes }}
+                      </n-text>
                     </div>
-                    <n-button
-                      v-if="!readOnly"
-                      size="tiny"
-                      type="error"
-                      text
-                      :loading="deletingId === elem.id"
-                      @click="doDelete(elem)"
-                    >删除</n-button>
-                  </div>
+                  </n-space>
                 </n-space>
 
-                <n-empty v-if="!loading && elements.length === 0 && !storyNodeNotFound" description="暂无关联元素" />
+                <n-empty v-if="!loading && elements.length === 0" description="暂无关联元素" size="small" />
               </n-space>
             </n-spin>
 
-            <n-card
-              v-if="storyNodeId && !storyNodeNotFound && !readOnly"
-              title="添加元素关联"
-              size="small"
-              :bordered="false"
-              style="margin-top: 10px; border-top: 1px solid var(--n-divider-color, rgba(0,0,0,.07))"
-            >
-              <n-space vertical :size="8">
-                <n-space :size="6" wrap>
-                  <n-select
-                    v-model:value="form.element_type"
-                    :options="elementTypeOptions"
-                    size="small"
-                    style="width: 90px"
-                    placeholder="类型"
-                  />
-                  <n-input
-                    v-model:value="form.element_id"
-                    size="small"
-                    placeholder="元素 ID（人物/地点名称）"
-                    style="flex: 1; min-width: 120px"
-                  />
-                </n-space>
-                <n-space :size="6" wrap>
-                  <n-select
-                    v-model:value="form.relation_type"
-                    :options="relationTypeOptions"
-                    size="small"
-                    style="width: 100px"
-                    placeholder="关联类型"
-                  />
-                  <n-select
-                    v-model:value="form.importance"
-                    :options="importanceOptions"
-                    size="small"
-                    style="width: 80px"
-                    placeholder="重要性"
-                  />
-                  <n-input
-                    v-model:value="form.notes"
-                    size="small"
-                    placeholder="备注（可选）"
-                    style="flex: 1; min-width: 80px"
-                  />
-                </n-space>
-                <n-button
-                  type="primary"
-                  size="small"
-                  :loading="adding"
-                  :disabled="!form.element_type || !form.element_id || !form.relation_type"
-                  @click="doAdd"
-                >
-                  添加关联
-                </n-button>
-              </n-space>
-            </n-card>
+            <!-- 移除添加元素关联表单，改为只读显示 -->
           </n-card>
 
           <!-- 片场：本章伏笔回收建议（原右侧「片场 → 本章建议」） -->
@@ -470,6 +399,16 @@ const elemTypeColor = (t: string): 'error' | 'warning' | 'info' | 'success' | 'd
 }
 const importanceLabel = (i: string) => importanceOptions.find(o => o.value === i)?.label ?? i
 const relationLabel = (r: string) => relationTypeOptions.find(o => o.value === r)?.label ?? r
+
+// 根据重要性返回标签类型
+const getImportanceType = (importance: string): 'error' | 'warning' | 'info' | 'success' | 'default' => {
+  const map: Record<string, 'error' | 'warning' | 'info' | 'success' | 'default'> = {
+    major: 'error',   // 主要 - 红色
+    normal: 'info',   // 一般 - 蓝色
+    minor: 'default'  // 次要 - 灰色
+  }
+  return map[importance] || 'default'
+}
 
 const groupedCharacters = computed(() =>
   elements.value.filter(e => e.element_type === 'character')
@@ -832,5 +771,28 @@ onMounted(async () => {
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--n-code-color);
+}
+
+/* 只读元素项样式 */
+.ce-item-readonly {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--n-color-modal);
+  border: 1px solid var(--n-border-color);
+  transition: all 0.2s ease;
+}
+
+.ce-item-readonly:hover {
+  border-color: var(--n-primary-color);
+  background: rgba(99, 102, 241, 0.02);
+}
+
+.ce-element-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--n-text-color-1);
+  margin-right: 8px;
 }
 </style>
