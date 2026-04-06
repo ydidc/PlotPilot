@@ -11,10 +11,17 @@ import asyncio
 import json
 import logging
 import re
-from typing import Any, List, Tuple
+import uuid
+from typing import Any, List, Optional, Tuple
 
 from domain.ai.services.llm_service import LLMService, GenerationConfig
 from domain.ai.value_objects.prompt import Prompt
+from domain.novel.value_objects.foreshadowing import (
+    Foreshadowing,
+    ForeshadowingStatus,
+    ImportanceLevel,
+)
+from domain.novel.value_objects.novel_id import NovelId
 from domain.structure.story_node import NodeType
 
 logger = logging.getLogger(__name__)
@@ -78,37 +85,121 @@ def _resolve_beat_sections(
     return _beats_from_structure_outline(novel_id, chapter_number)
 
 
-async def _llm_chapter_summary_only(
+async def llm_chapter_extract_bundle(
     llm: LLMService,
     chapter_content: str,
     chapter_number: int,
-) -> Tuple[str, str, str]:
-    """LLM 只生成：章末总结、关键事件、埋线（节拍不在此生成）。"""
+) -> dict:
+    """一次 LLM 调用：叙事摘要 + 关键事件/埋线 + 人物关系三元组 + 伏笔线索（与后台抽取同源，避免两次调用）。"""
     body = chapter_content.strip()
     if len(body) > 24000:
         body = body[:24000] + "\n\n…（正文过长已截断）"
 
-    system = """你是网文叙事编辑。根据给定章节正文，输出 JSON（不要其它说明文字）：
+    system = """你是网文叙事编辑与信息抽取。根据章节正文输出**一个** JSON 对象（不要其它说明文字）：
 {
   "summary": "string，200～500 字，章末叙事总结，便于检索与衔接",
   "key_events": "string",
-  "open_threads": "string"
+  "open_threads": "string",
+  "relation_triples": [ {"subject": "主体", "predicate": "关系", "object": "客体"} ],
+  "foreshadow_hints": [ {"description": "伏笔或悬念描述"} ]
 }
-说明：节拍/分镜已在写作前的规划里，不要在此编造 beat 列表；summary 用中文；严格合法 JSON。"""
+约束：
+- relation_triples：只写文中明确出现的关系，最多 8 条；无则 []。
+- foreshadow_hints：潜在伏笔/未解悬念，最多 4 条；无则 []。
+- 不要编造 beat 列表；summary/key_events/open_threads 用中文；严格合法 JSON。"""
 
     user = f"第 {chapter_number} 章正文如下：\n\n{body}"
 
     prompt = Prompt(system=system, user=user)
-    config = GenerationConfig(max_tokens=2048, temperature=0.45)
+    config = GenerationConfig(max_tokens=3072, temperature=0.45)
 
     result = await llm.generate(prompt, config)
     raw = result.content if hasattr(result, "content") else str(result)
     data = _extract_json_object(raw)
 
-    summary = str(data.get("summary", "")).strip()
-    key_events = str(data.get("key_events", "")).strip()
-    open_threads = str(data.get("open_threads", "")).strip()
-    return summary, key_events, open_threads
+    triples_raw = data.get("relation_triples") or data.get("triples") or []
+    if not isinstance(triples_raw, list):
+        triples_raw = []
+    hints_raw = data.get("foreshadow_hints") or data.get("foreshadows") or []
+    if not isinstance(hints_raw, list):
+        hints_raw = []
+
+    return {
+        "summary": str(data.get("summary", "")).strip(),
+        "key_events": str(data.get("key_events", "")).strip(),
+        "open_threads": str(data.get("open_threads", "")).strip(),
+        "relation_triples": triples_raw[:8],
+        "foreshadow_hints": hints_raw[:4],
+    }
+
+
+def persist_bundle_triples_and_foreshadows(
+    novel_id: str,
+    chapter_number: int,
+    bundle: dict,
+    triple_repository: Any,
+    foreshadowing_repo: Any,
+) -> None:
+    """将 bundle 中的三元组与伏笔写入表（与旧 BG 两任务等价，但只解析一次 JSON）。"""
+    triples = bundle.get("relation_triples") or []
+    hints = bundle.get("foreshadow_hints") or []
+
+    if triple_repository and triples:
+        kr = getattr(triple_repository, "_kr", None)
+        if kr is None:
+            logger.warning("triple_repository 无 _kr，跳过三元组落库")
+        else:
+            for item in triples:
+                if not isinstance(item, dict):
+                    continue
+                s = str(item.get("subject", "")).strip()
+                p = str(item.get("predicate", "")).strip()
+                o = str(item.get("object", "")).strip()
+                if not (s and p and o):
+                    continue
+                row = {
+                    "id": str(uuid.uuid4()),
+                    "subject": s,
+                    "predicate": p,
+                    "object": o,
+                    "chapter_number": chapter_number,
+                    "source_type": "autopilot_extract",
+                    "confidence": 0.7,
+                    "entity_type": "character",
+                    "note": "",
+                }
+                try:
+                    kr.save_triple(novel_id, row)
+                except Exception as e:
+                    logger.debug("三元组落库跳过: %s", e)
+
+    if foreshadowing_repo and hints:
+        try:
+            registry = foreshadowing_repo.get_by_novel_id(NovelId(novel_id))
+            if not registry:
+                return
+            for h in hints:
+                if not isinstance(h, dict):
+                    desc = str(h).strip()
+                else:
+                    desc = str(h.get("description", "")).strip()
+                if not desc:
+                    continue
+                try:
+                    registry.register(
+                        Foreshadowing(
+                            id=str(uuid.uuid4()),
+                            planted_in_chapter=max(1, chapter_number),
+                            description=desc,
+                            importance=ImportanceLevel.MEDIUM,
+                            status=ForeshadowingStatus.PLANTED,
+                        )
+                    )
+                except Exception:
+                    pass
+            foreshadowing_repo.save(registry)
+        except Exception as e:
+            logger.warning("伏笔落库失败 novel=%s ch=%s: %s", novel_id, chapter_number, e)
 
 
 async def sync_chapter_narrative_after_save(
@@ -118,8 +209,10 @@ async def sync_chapter_narrative_after_save(
     knowledge_service: Any,
     indexing_svc: Any,
     llm_service: LLMService,
+    triple_repository: Any = None,
+    foreshadowing_repo: Any = None,
 ) -> None:
-    """异步：LLM 写 summary → 节拍来自规划/既有 knowledge → upsert → 向量索引。"""
+    """异步：一次 LLM 写 summary/事件/埋线 + 可选三元组与伏笔 → 节拍来自规划 → upsert knowledge → 向量索引。"""
     if not content or not str(content).strip():
         logger.debug("跳过叙事同步：正文为空 novel=%s ch=%s", novel_id, chapter_number)
         return
@@ -138,12 +231,14 @@ async def sync_chapter_narrative_after_save(
         pass
 
     try:
-        summary, key_events, open_threads = await _llm_chapter_summary_only(
-            llm_service, content, chapter_number
-        )
+        bundle = await llm_chapter_extract_bundle(llm_service, content, chapter_number)
+        summary = bundle.get("summary") or ""
+        key_events = bundle.get("key_events") or ""
+        open_threads = bundle.get("open_threads") or ""
     except Exception as e:
-        logger.warning("LLM 章末总结失败 novel=%s ch=%s: %s", novel_id, chapter_number, e)
+        logger.warning("LLM 章末 bundle 失败 novel=%s ch=%s: %s", novel_id, chapter_number, e)
         summary, key_events, open_threads = "", "", ""
+        bundle = {"relation_triples": [], "foreshadow_hints": []}
 
     consistency_note = ""
     if existing:
@@ -165,6 +260,20 @@ async def sync_chapter_narrative_after_save(
         beat_sections=beat_sections,
         sync_status="synced" if summary else "draft",
     )
+
+    if triple_repository is not None or foreshadowing_repo is not None:
+        try:
+            persist_bundle_triples_and_foreshadows(
+                novel_id,
+                chapter_number,
+                bundle,
+                triple_repository,
+                foreshadowing_repo,
+            )
+        except Exception as e:
+            logger.warning(
+                "bundle 三元组/伏笔落库失败 novel=%s ch=%s: %s", novel_id, chapter_number, e
+            )
     logger.info(
         "分章叙事已落库 novel=%s ch=%s beats=%d(src=planning/knowledge) summary_len=%d",
         novel_id,
@@ -191,6 +300,8 @@ def sync_chapter_narrative_after_save_blocking(
     knowledge_service: Any,
     indexing_svc: Any,
     llm_service: LLMService,
+    triple_repository: Any = None,
+    foreshadowing_repo: Any = None,
 ) -> None:
     """供 FastAPI BackgroundTasks 同步入口调用。"""
     try:
@@ -202,6 +313,8 @@ def sync_chapter_narrative_after_save_blocking(
                 knowledge_service,
                 indexing_svc,
                 llm_service,
+                triple_repository=triple_repository,
+                foreshadowing_repo=foreshadowing_repo,
             )
         )
     except RuntimeError as e:
@@ -216,6 +329,8 @@ def sync_chapter_narrative_after_save_blocking(
                         knowledge_service,
                         indexing_svc,
                         llm_service,
+                        triple_repository=triple_repository,
+                        foreshadowing_repo=foreshadowing_repo,
                     )
                 )
             finally:
