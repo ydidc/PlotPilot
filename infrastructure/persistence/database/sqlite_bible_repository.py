@@ -58,7 +58,7 @@ class SqliteBibleRepository(BibleRepository):
                 ib = getattr(char, "idle_behavior", None) or ""
                 conn.execute(
                     """
-                    INSERT INTO bible_characters (
+                    INSERT OR REPLACE INTO bible_characters (
                         id, novel_id, name, description,
                         mental_state, mental_state_reason, verbal_tic, idle_behavior,
                         created_at, updated_at
@@ -107,7 +107,7 @@ class SqliteBibleRepository(BibleRepository):
             for loc in bible.locations:
                 conn.execute(
                     """
-                    INSERT INTO bible_locations
+                    INSERT OR REPLACE INTO bible_locations
                     (id, novel_id, name, description, location_type, parent_id, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,

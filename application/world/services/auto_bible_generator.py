@@ -165,8 +165,16 @@ class AutoBibleGenerator:
             bible_data = await self._generate_characters(premise, target_chapters, existing_worldbuilding)
             # 保存人物
             character_ids = []
+            used_char_ids = set()  # 用于跟踪已使用的人物ID
             for idx, char_data in enumerate(bible_data.get("characters", [])):
                 character_id = f"{novel_id}-char-{idx+1}"
+                
+                # 检查并处理重复ID
+                if character_id in used_char_ids:
+                    logger.info(f"Character ID {character_id} already exists, generating new ID")
+                    character_id = f"{novel_id}-char-{idx+1}-{len(used_char_ids)}"
+                
+                used_char_ids.add(character_id)
                 try:
                     self.bible_service.add_character(
                         novel_id=novel_id,
@@ -201,15 +209,23 @@ class AutoBibleGenerator:
             existing_worldbuilding = self._load_worldbuilding(novel_id)
             existing_characters = self._load_characters(novel_id)
             bible_data = await self._generate_locations(premise, target_chapters, existing_worldbuilding, existing_characters)
-            # 保存地点
-            location_ids = []
-            for idx, loc_data in enumerate(bible_data.get("locations", [])):
-                raw_id = loc_data.get("id")
-                location_id = (
-                    str(raw_id).strip()
-                    if isinstance(raw_id, str) and str(raw_id).strip()
-                    else f"{novel_id}-loc-{idx+1}"
-                )
+        # 保存地点
+        location_ids = []
+        used_ids = set()  # 用于跟踪已使用的ID，防止重复
+        for idx, loc_data in enumerate(bible_data.get("locations", [])):
+            raw_id = loc_data.get("id")
+            location_id = (
+                str(raw_id).strip()
+                if isinstance(raw_id, str) and str(raw_id).strip()
+                else f"{novel_id}-loc-{idx+1}"
+            )
+            
+            # 检查并处理重复ID
+            if location_id in used_ids:
+                logger.info(f"Location ID {location_id} already exists, generating new ID")
+                location_id = f"{novel_id}-loc-{idx+1}-{len(used_ids)}"
+            
+            used_ids.add(location_id)
                 p_raw = loc_data.get("parent_id")
                 parent_id = (
                     str(p_raw).strip()
@@ -410,8 +426,16 @@ JSON 格式（不要有其他文字）：
             return
 
         # 添加人物
+        used_character_ids = set()  # 用于跟踪已使用的人物ID
         for idx, char_data in enumerate(bible_data.get("characters", [])):
             character_id = f"{novel_id}-char-{idx+1}"
+            
+            # 检查并处理重复ID
+            if character_id in used_character_ids:
+                logger.info(f"Character ID {character_id} already exists, generating new ID")
+                character_id = f"{novel_id}-char-{idx+1}-{len(used_character_ids)}"
+            
+            used_character_ids.add(character_id)
             try:
                 self.bible_service.add_character(
                     novel_id=novel_id,
@@ -428,6 +452,7 @@ JSON 格式（不要有其他文字）：
                     raise
 
         # 添加地点
+        used_location_ids = set()  # 用于跟踪已使用的位置ID
         for idx, loc_data in enumerate(bible_data.get("locations", [])):
             raw_id = loc_data.get("id")
             location_id = (
@@ -435,6 +460,13 @@ JSON 格式（不要有其他文字）：
                 if isinstance(raw_id, str) and str(raw_id).strip()
                 else f"{novel_id}-loc-{idx+1}"
             )
+            
+            # 检查并处理重复ID
+            if location_id in used_location_ids:
+                logger.info(f"Location ID {location_id} already exists, generating new ID")
+                location_id = f"{novel_id}-loc-{idx+1}-{len(used_location_ids)}"
+            
+            used_location_ids.add(location_id)
             p_raw = loc_data.get("parent_id")
             parent_id = (
                 str(p_raw).strip()
